@@ -21,6 +21,11 @@ secrets/
 results/*
 !results/.gitkeep
 
+# Manual chat-evaluation working folders (raw prompts/transcripts).
+# To publish anonymized examples later, copy them to examples/manual/ and commit deliberately.
+manual_prompts/
+manual_responses/
+
 # Scratch / temporary files
 scratch/
 tmp/

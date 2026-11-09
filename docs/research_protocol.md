@@ -101,6 +101,10 @@ Confusion matrices: rows are reference labels and columns are predictions, with 
    temperature would be labelled `PASS` by it, while the gate returns `INSUFFICIENT_DATA`.
    No current case contains NaN; this needs fixing before NaN cases are added.
 
+7. **Format normalization.** FORMAT_NORMALIZED results depend on one documented quote rule
+   and cannot tell where a formatting error came from. They supplement STRICT results; they
+   never replace them.
+
 ## 7. Reproduction
 
 Requirements: Python 3.10+ and the standard library only. No API key, network access or paid
@@ -121,7 +125,29 @@ Outputs are written to `results/`:
 Every row and summary is tagged `SIMULATED_MOCK_NOT_REAL_LLM_PERFORMANCE`. Mock responses are
 deterministic, so repeated runs produce identical outputs.
 
-## 8. Before any live-model stage
+## 8. Stage 4: manual real-model runs
+
+The first real model answers are collected by hand through the Claude chat interface. See [manual_evaluation.md](manual_evaluation.md). They are tagged `REAL_MANUAL_LLM_EVALUATION` and must be reported with their limitations: manual UI, unknown sampling parameters, no API system role, one sample per case, and a very small n.
+
+### 8.1 Evaluation modes for real answers
+
+- **STRICT (primary).** The Stage 2 parser, unchanged.
+- **FORMAT_NORMALIZED (secondary).** Typographic double quotes U+201C–U+201F are replaced with
+  U+0022 on an in-memory copy, but only after a strict `invalid_json` failure. The copy is then
+  re-parsed strictly, and anything still invalid stays INVALID. Original files and their hashes
+  are kept; the transformations applied to each case are recorded.
+- Coverage and accuracy are reported **separately** for each mode. The difference between them
+  measures format non-compliance; it says nothing about decision quality.
+
+### 8.2 First run (2026-11-09)
+
+- STRICT coverage was 0/3: every JSON quote was U+201C/U+201D.
+- FORMAT_NORMALIZED coverage was 3/3, with 3/3 correct decisions and no vetoes.
+- It cannot be determined from the saved files whether the quotes came from the model or from
+  the copy/save path. See [manual_evaluation.md](manual_evaluation.md) for the diagnosis and
+  the clipboard check that settles it.
+
+## 9. Before any live-model stage
 
 - Freeze the prompt (`PROMPT_VERSION`), the dataset and this protocol.
 - Audit the labels.

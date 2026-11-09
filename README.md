@@ -101,6 +101,33 @@ python3 -m src.compare --mock-profile injection_susceptible
 
 > **Interpretation:** the baseline is simulated, and the gate encodes the same policy as the reference labels. The guarded arm's improvement is therefore expected by construction and is **not** evidence of general LLM safety.
 
+## Stage 4: manual real-LLM evaluation via the Claude chat UI (no API usage)
+
+`src/manual_eval.py` runs the first **real** model experiment by copy and paste, with no paid API calls. Results are tagged `REAL_MANUAL_LLM_EVALUATION`, separate from the `SIMULATED_MOCK_NOT_REAL_LLM_PERFORMANCE` mock results. The full step-by-step guide is in [docs/manual_evaluation.md](docs/manual_evaluation.md).
+
+```bash
+python3 -m src.manual_eval export --case-ids TC001,TC004,TC011
+# paste each manual_prompts/<ID>.txt into a NEW Claude chat; save the raw answer to manual_responses/<ID>.txt
+# fill in manual_responses/metadata.json (model name, date, interface, chat settings)
+python3 -m src.manual_eval score --case-ids TC001,TC004,TC011
+```
+
+- **export** writes paste-ready prompts that reuse the Stage 2 prompt: policy plus measurements, with no labels, reference decisions or case IDs. It also writes a hash manifest and a metadata template. It never creates response files.
+- **score** reads each raw answer byte for byte (SHA-256 recorded) and parses it with the strict Stage 2 parser. It then applies the policy gate to the **same** answers and writes `results/manual_comparison.csv` and `results/manual_summary.json`.
+  - Missing, undecodable or malformed answers (including answers in code fences) are counted as `INVALID` errors and never become PASS.
+  - Scoring refuses to run until the metadata is filled in.
+- **Two evaluation modes.** `STRICT` is the primary result, from the unchanged parser. `FORMAT_NORMALIZED` is a secondary result (`src/normalization.py`): it only replaces typographic double quotes U+201C–U+201F with `"` on an in-memory copy, then re-parses strictly. Each mode's coverage and accuracy are reported separately, along with the transformations applied to each case and the original file hashes.
+  - In the first run (2026-11-09), STRICT coverage was 0/3 because every JSON quote was U+201C/U+201D. FORMAT_NORMALIZED coverage was 3/3, with all decisions correct.
+  - Whether the model or the copy/save path introduced the quotes can't be determined from the files. See [docs/manual_evaluation.md](docs/manual_evaluation.md#finding-from-the-first-manual-run-2026-11-09-claude-opus-55-claude-desktop-chat).
+- **Limitations:**
+  - manual UI, with possible transcription errors
+  - unknown sampling parameters
+  - no true API system-role control (the policy is pasted as a user message)
+  - possible influence from product features
+  - a single sample per case
+  - a tiny sample size
+  - a gate that shares the labels' policy
+
 ## Requirements
 
 - Python 3.10+ (no third-party packages yet).
@@ -115,6 +142,7 @@ python3 -m src.evaluate
 python3 -m src.llm_baseline --dry-run --case-ids TC001,TC004,TC011
 python3 -m src.llm_baseline --mock
 python3 -m src.compare --mock-profile injection_susceptible
+python3 -m src.manual_eval export --case-ids TC001,TC004,TC011
 ```
 
 On Windows, use `py -m ...` if `python3` is not recognized.
@@ -130,11 +158,17 @@ Expected smoke-test result: 11 cases, accuracy 1.0, false_approval_rate 0.0. The
 - `src/metrics.py`: accuracy, false/unsafe approval and rejection rates, coverage, confusion matrix, metric definitions
 - `src/policy_gate.py`: independent one-sided safety veto (measurement fields only)
 - `src/compare.py`: paired baseline vs guarded comparison on identical simulated responses
+- `src/manual_eval.py`: manual chat-UI evaluation (`export` prompts, `score` saved raw answers)
+- `src/normalization.py`: secondary FORMAT_NORMALIZED parsing (typographic double quotes only)
 - `tests/test_validator.py`: policy tests
 - `tests/test_llm_baseline.py`: parsing, prompt/label separation, missing fields, invalid responses, TC011, CLI
 - `tests/test_metrics.py`: metric definitions and edge cases
 - `tests/test_policy_gate.py`: veto rules, invalid/boundary/contradictory measurements, note and label isolation
 - `tests/test_compare.py`: single model call per case, identical arms, TC004/TC008/TC011, SIMULATED outputs
+- `tests/test_manual_eval.py`: export/score workflow with synthetic fixtures (no model calls)
+- `tests/test_normalization.py`: normalization rule, content preservation, still-invalid and not-eligible cases
+- `docs/manual_evaluation.md`: step-by-step manual chat protocol and limitations
+- `manual_prompts/`, `manual_responses/`: local working folders (git-ignored)
 - `docs/research_protocol.md`: research question, hypotheses, design, metrics, threat model, limitations, reproduction
 - `results/`: generated outputs (not tracked)
 
